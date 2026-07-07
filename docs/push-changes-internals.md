@@ -106,7 +106,7 @@ This is GitHub's official [Commits API](https://docs.github.com/en/graphql/refer
 | Aspect | git-cli path | github-api path |
 |--------|-------------|-----------------|
 | **Mechanism** | Local `git` binary via `@actions/exec` | GitHub GraphQL API (`createCommitOnBranch` mutation) via `@changesets/ghcommit` |
-| **Attribution** | `github-actions[bot]` (configured by `setupUser` at `src/git.ts` lines 58–76) | Attributed to the `GITHUB_TOKEN` owner (the user or app that owns the token) |
+| **Attribution** | `github-actions[bot]` only if `setupGitUser` input is `true` (invokes `setupUser`, `src/git.ts` lines 58–76); otherwise uses the runner's existing git identity | Attributed to the `GITHUB_TOKEN` owner (the user or app that owns the token) |
 | **Signing** | Unsigned (unless runner is configured for GPG signing externally) | **GPG-signed by GitHub** automatically (server-side commits are always signed) |
 | **`setupUser`** | Configures `user.name`/`user.email` for git commits | **No-op** — returns immediately when `this.octokit` is set (line 59–61) |
 | **`prepareBranch`** | Checks out (or creates) branch locally, then `git reset --hard` to `github.context.sha` | **No-op** — returns immediately (lines 95–98); branch creation/update is handled server-side by the API |
