@@ -75,8 +75,8 @@ Compares the committed tree (`TREE` at `oid`) against the working directory (`WO
 
 - Skips `.gitignore`'d files.
 - Skips unchanged files (`prevOid === currentOid`) **before** symlink/executable checks — so already-committed symlinks and executables that stay untouched do **not** fail the walk (`@changesets/ghcommit@2.0.1`, action #563).
-- **Scopes to `cwd`**: if `cwd` differs from repo root, files whose path doesn't start with `relative(repoRoot, cwd) + "/"` are excluded. This is the `git add .` emulation.
-- Throws if a **changed** path is a symlink, or if the working-tree mode is executable — GitHub's `createCommitOnBranch` API still cannot add/update those file types. Use `commitMode: git-cli` (default) when the version commit must touch them.
+- Throws if a **changed** path is a symlink (committed or working tree), or if the working-tree mode is executable — GitHub's `createCommitOnBranch` API still cannot add/update those file types. Use `commitMode: git-cli` (default) when the version commit must touch them.
+- **Scopes to `cwd`** after those checks: if `cwd` differs from repo root, files whose path doesn't start with `relative(repoRoot, cwd) + "/"` are excluded. This is the `git add .` emulation (note: a changed symlink/executable outside `cwd` can still throw before this filter).
 - Deleted files → `deletions[]`; added/modified files → reads their content via `workdir.content()` into `additions[]` as Buffers.
 
 #### Step 3 — Create commit via GitHub GraphQL API
