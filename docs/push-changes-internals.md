@@ -119,7 +119,8 @@ This is GitHub's official [Commits API](https://docs.github.com/en/graphql/refer
 
 ## 4. Call sites in `src/run.ts`
 
-- **`pushChanges`** is called at line 358 during `runVersion` to push the version-bump commit to the PR branch.
-- **`pushTag`** is called at lines 124 and 146 during `runPublish` to tag releases:
+- **`pushChanges`** is called during `runVersion` to push the version-bump commit to the PR branch (`changeset-release/<branch>`).
+- **Existing PR fetch before push** — `runVersion` lists open PRs for `head: owner:changeset-release/<branch>` **before** `pushChanges`. With `commitMode: github-api`, `@changesets/ghcommit` may reset the remote branch to the base SHA (which would otherwise close the PR); keeping the PR number and calling `pulls.update` with `state: "open"` reopens/updates it (#488).
+- **`pushTag`** is called during `runPublish` to tag releases:
   - git-cli: `git push origin <tag>`
   - github-api: `octokit.rest.git.createRef({ ref: "refs/tags/<tag>", sha: github.context.sha })`
