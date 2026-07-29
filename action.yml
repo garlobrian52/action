@@ -41,7 +41,10 @@ inputs:
     required: false
     default: "git-cli"
   branch:
-    description: Sets the branch in which the action will run. Default to `github.ref_name` if not provided
+    description: >
+      Sets the branch the action treats as the release base (version PR targets this branch;
+      version branch is changeset-release/<branch>). Defaults to github.context.ref with the
+      refs/heads/ prefix removed when not provided.
     required: false
 outputs:
   published:

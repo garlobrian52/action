@@ -86,3 +86,4 @@ Auth-line detection matches npm CLI style: `/^\s*\/\/registry\.npmjs\.org\/:[_-]
 | `src/index.ts` | Token resolve, `.netrc`, `.npmrc` / OIDC branch, dispatch publish vs version |
 | `src/run.ts` → `runPublish` / `runVersion` | Inject `GITHUB_TOKEN` into script env |
 | `docs/push-changes-internals.md` | How commits are pushed after versioning |
+| `docs/maintainer-release.md` | How **this** repo versions/publishes the action itself |

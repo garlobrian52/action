@@ -24,6 +24,8 @@ This action for [Changesets](https://github.com/changesets/changesets) creates a
 - hasChangesets - A boolean about whether there were changesets. Useful if you want to create your own publishing functionality.
 - pullRequestNumber - The pull request number that was created or updated
 
+If every remaining changeset has an empty `releases` list, the action logs that all changesets are empty and **does not** open or update a Version Packages PR (`hasChangesets` is still `true`).
+
 ### Example workflow:
 
 #### Without Publishing
