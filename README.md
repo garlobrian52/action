@@ -6,6 +6,7 @@ This action for [Changesets](https://github.com/changesets/changesets) creates a
 
 ### Inputs
 
+- github-token - GitHub token used for API calls, PR creation, and git auth. Defaults to the workflow token (`github.token`). An explicit `GITHUB_TOKEN` env var still wins if set (legacy workflows). Most workflows do **not** need `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}`.
 - publish - The command to use to build and publish packages
 - version - The command to update version, edit CHANGELOG, read and delete changesets. Default to `changeset version` if not provided
 - commit - The commit message to use. Default to `Version Packages`
@@ -14,11 +15,14 @@ This action for [Changesets](https://github.com/changesets/changesets) creates a
 - createGithubReleases - A boolean value to indicate whether to create Github releases after `publish` or not. Default to `true`
 - commitMode - Specifies the commit mode. Use `"git-cli"` to push changes using the Git CLI, or `"github-api"` to push changes via the GitHub API. When using `"github-api"`, all commits and tags are GPG-signed and attributed to the user or app who owns the `GITHUB_TOKEN`. Default to `git-cli`.
 - cwd - Changes node's `process.cwd()` if the project is not located on the root. Default to `process.cwd()`
+- branch - Branch the action treats as the release base (version PR targets this branch; version branch is `changeset-release/<branch>`). Defaults to the current branch from `github.context.ref` with the `refs/heads/` prefix removed.
 
 ### Outputs
 
 - published - A boolean value to indicate whether a publishing has happened or not
 - publishedPackages - A JSON array to present the published packages. The format is `[{"name": "@xx/xx", "version": "1.2.0"}, {"name": "@xx/xy", "version": "0.8.9"}]`
+- hasChangesets - A boolean about whether there were changesets. Useful if you want to create your own publishing functionality.
+- pullRequestNumber - The pull request number that was created or updated
 
 ### Example workflow:
 
@@ -42,12 +46,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v3
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install Dependencies
         run: yarn
@@ -58,7 +62,20 @@ jobs:
 
 #### With Publishing
 
-Before you can setup this action with publishing, you'll need to have an [npm token](https://docs.npmjs.com/creating-and-viewing-authentication-tokens) that can publish the packages in the repo you're setting up the action for and doesn't have 2FA on publish enabled ([2FA on auth can be enabled](https://docs.npmjs.com/about-two-factor-authentication)). You'll also need to [add it as a secret on your GitHub repo](https://help.github.com/en/articles/virtual-environments-for-github-actions#creating-and-using-secrets-encrypted-variables) with the name `NPM_TOKEN`. Once you've done that, you can create a file at `.github/workflows/release.yml` with the following content.
+You can authenticate to npm with either:
+
+1. **`NPM_TOKEN`** — a classic [npm token](https://docs.npmjs.com/creating-and-viewing-authentication-tokens) that can publish and does not require 2FA on publish ([2FA on auth can still be enabled](https://docs.npmjs.com/about-two-factor-authentication)). Store it as a repo secret named `NPM_TOKEN`.
+2. **npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC) — omit `NPM_TOKEN` and grant the job `id-token: write` so GitHub Actions can obtain an OIDC token. The action detects `ACTIONS_ID_TOKEN_REQUEST_TOKEN` / `ACTIONS_ID_TOKEN_REQUEST_URL` and skips writing an auth line to `.npmrc`.
+
+When `NPM_TOKEN` is set, the action writes (or appends) this line to `$HOME/.npmrc` only if no existing npmjs auth line is present:
+
+```
+//registry.npmjs.org/:_authToken=<NPM_TOKEN>
+```
+
+If a user `.npmrc` already exists **with** an auth token for `registry.npmjs.org`, the action leaves it alone. If `NPM_TOKEN` is unset, the action does **not** write `undefined` into `.npmrc` (required for trusted publishing).
+
+Example with `NPM_TOKEN`:
 
 ```yml
 name: Release
@@ -76,12 +93,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24
 
       - name: Install Dependencies
         run: yarn
@@ -101,14 +118,29 @@ jobs:
         run: my-slack-bot send-notification --message "A new version of ${GITHUB_REPOSITORY} was published!"
 ```
 
-By default the GitHub Action creates a `.npmrc` file with the following content:
+Example with trusted publishing (no `NPM_TOKEN`):
 
-```
-//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}
+```yml
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: yarn
+      - uses: changesets/action@v1
+        with:
+          publish: yarn release
 ```
 
-However, if a `.npmrc` file is found, the GitHub Action does not recreate the file. This is useful if you need to configure the `.npmrc` file on your own.
-For example, you can add a step before running the Changesets GitHub Action:
+If you need a custom `.npmrc`, create it in a prior step; the action will not overwrite an existing auth token line for `registry.npmjs.org`:
 
 ```yml
 - name: Creating .npmrc
@@ -140,12 +172,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24
 
       - name: Install Dependencies
         run: yarn
@@ -182,12 +214,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24
 
       - name: Install Dependencies
         run: yarn

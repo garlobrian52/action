@@ -74,9 +74,9 @@ await git.walk({ fs, dir: repoRoot, trees, map: async (filepath, [commit, workdi
 Compares the committed tree (`TREE` at `oid`) against the working directory (`WORKDIR`). For each file:
 
 - Skips `.gitignore`'d files.
-- Skips unchanged files (`prevOid === currentOid`).
-- **Scopes to `cwd`**: if `cwd` differs from repo root, files whose path doesn't start with `relative(repoRoot, cwd) + "/"` are excluded. This is the `git add .` emulation.
-- Throws on symlinks or executable files (GitHub's `createCommitOnBranch` API doesn't support them).
+- Skips unchanged files (`prevOid === currentOid`) **before** symlink/executable checks — so already-committed symlinks and executables that stay untouched do **not** fail the walk (`@changesets/ghcommit@2.0.1`, action #563).
+- Throws if a **changed** path is a symlink (committed or working tree), or if the working-tree mode is executable — GitHub's `createCommitOnBranch` API still cannot add/update those file types. Use `commitMode: git-cli` (default) when the version commit must touch them.
+- **Scopes to `cwd`** after those checks: if `cwd` differs from repo root, files whose path doesn't start with `relative(repoRoot, cwd) + "/"` are excluded. This is the `git add .` emulation (note: a changed symlink/executable outside `cwd` can still throw before this filter).
 - Deleted files → `deletions[]`; added/modified files → reads their content via `workdir.content()` into `additions[]` as Buffers.
 
 #### Step 3 — Create commit via GitHub GraphQL API
@@ -113,7 +113,7 @@ This is GitHub's official [Commits API](https://docs.github.com/en/graphql/refer
 | **Dirty-check** | Explicit: runs `git status --porcelain`; skips commit if clean | Implicit: `isomorphic-git.walk` diffs working tree vs base; if no changes detected, `fileChanges` will be empty |
 | **Push method** | `git push origin HEAD:<branch> --force` | `updateRefMutation` with `force: true` (if branch diverged from base), then `createCommitOnBranch` which advances the ref |
 | **File scoping** | `git add .` stages everything in `cwd` and below | `isomorphic-git` walk filtered to paths starting with `relative(repoRoot, cwd)` |
-| **Limitations** | None for standard files | Rejects symlinks and executable-mode files (GitHub API limitation) |
+| **Limitations** | None for standard files | Unchanged committed symlinks/executables are OK; **changing** them still fails (GitHub API limitation) — use `git-cli` |
 
 ---
 
