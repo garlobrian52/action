@@ -2,7 +2,7 @@
 
 This document describes the static page at `website/index.html` (added in PR #3): intent, structure, how to view it, and how to update content safely.
 
-Deploy to GitHub Pages is documented in [`github-pages-deploy.md`](./github-pages-deploy.md) (workflow added in PR #4).
+Deploy to GitHub Pages is documented in [`github-pages-deploy.md`](./github-pages-deploy.md) (static workflow in PR #4). Note: a second workflow, `jekyll-gh-pages.yml`, also deploys to the same URL and currently publishes the Jekyll-rendered root `README.md` after every push to `main` — see that doc before assuming the live site is this HTML page.
 
 ---
 
@@ -24,7 +24,7 @@ Use it when you need a local or public, dependency-free preview of the channel t
 | **Layout** | `<header>` → `<main>` (three `<section>`s) → `<footer>` |
 | **Interactivity** | CSS-only (card hover); no `<script>` |
 | **External content** | All “Learn more” / market links point at `https://www.tradeweb.com/...` with `target="_blank"` and `rel="noopener"` |
-| **Hosting** | Published from `website/` by `.github/workflows/deploy-pages.yml` → https://garlobrian52.github.io/action/ |
+| **Hosting** | Intended publisher: `.github/workflows/deploy-pages.yml` (`path: website`). Competing publisher: `.github/workflows/jekyll-gh-pages.yml` (repo-root Jekyll). Live URL https://garlobrian52.github.io/action/ reflects whichever finished last — see [`github-pages-deploy.md`](./github-pages-deploy.md). |
 
 There is no build step. Opening, serving, or Pages-deploying the HTML file is the full delivery path.
 
@@ -89,7 +89,7 @@ No `yarn` / Node install is required for the website itself.
 ## 5. Constraints and pitfalls
 
 1. **Action vs website** — Changes under `website/` do not affect `changesets/action` behavior. Keep action docs (`README.md`, `docs/push-changes-internals.md`) separate unless you are intentionally cross-linking.
-2. **Deploy path filter** — Production updates go live only when `website/**` (or the Pages workflow file) lands on `main`, or via manual `workflow_dispatch`. See [`github-pages-deploy.md`](./github-pages-deploy.md).
+2. **Deploy path filter + competing Jekyll workflow** — `deploy-pages.yml` runs only when `website/**` (or that workflow file) lands on `main`, or via `workflow_dispatch`. Every push to `main` also runs `jekyll-gh-pages.yml`, which can overwrite the live URL with README HTML. See [`github-pages-deploy.md`](./github-pages-deploy.md).
 3. **Link drift** — Channel URLs are hardcoded. If Tradeweb renames paths, update the `href`s in `website/index.html` (history section + each card).
 4. **Shared Bond Connect URL** — Northbound and Southbound cards both link to the same Bond Connect page in the current HTML; that matches source, not a docs typo.
 5. **Informational disclaimer** — Footer already marks the page as informational only; do not treat copy as product/legal source of truth—prefer tradeweb.com.
@@ -107,4 +107,4 @@ When changing the page:
 3. Preserve `rel="noopener"` on `target="_blank"` links.
 4. Spot-check in a browser at desktop and narrow widths (cards use `repeat(auto-fit, minmax(230px, 1fr))`).
 5. Confirm external URLs still resolve on tradeweb.com.
-6. After merge to `main`, confirm the Pages workflow run and the live URL.
+6. After merge to `main`, confirm **Deploy website to GitHub Pages** (not only the Jekyll workflow) and that the live URL still shows this page.

@@ -1,33 +1,43 @@
-# GitHub Pages deploy — `website/` → Pages
+# GitHub Pages deploy
 
-This document describes how `.github/workflows/deploy-pages.yml` publishes the static site under `website/` to GitHub Pages (workflow added in PR #4; `enablement` removed in PR #5).
+This document covers how this fork publishes to GitHub Pages. There are **two** workflows that both target the same Pages site and share the concurrency group `pages`:
 
-For page content and local preview, see [`tradeweb-china-website.md`](./tradeweb-china-website.md).
+| Workflow file | Actions UI name | What it publishes |
+|---------------|-----------------|-------------------|
+| `.github/workflows/deploy-pages.yml` | Deploy website to GitHub Pages | Static `website/` (Tradeweb China page) |
+| `.github/workflows/jekyll-gh-pages.yml` | Deploy Jekyll with GitHub Pages dependencies preinstalled | Jekyll build of the **repo root** (renders `README.md`) |
+
+For Tradeweb page content and local preview, see [`tradeweb-china-website.md`](./tradeweb-china-website.md).
+
+**Live URL:** https://garlobrian52.github.io/action/
+
+As of the Jekyll workflow landing on `main` (`8a8e8f2`), the live site is the Jekyll-rendered README, not `website/index.html`. Re-running `deploy-pages.yml` would flip it back until the next Jekyll run.
+
+**Not related** to the Changesets Action runtime (`src/`, `action.yml`, release/CI workflows).
 
 ---
 
 ## 1. Intent
 
-Ship the dependency-free Tradeweb China Access Channels page at a public URL without a separate hosting stack. The workflow uploads the `website/` directory as a Pages artifact and deploys it with the official GitHub Pages actions.
+- **`deploy-pages.yml`** — ship the dependency-free Tradeweb China Access Channels page without a build step (added in PR #4).
+- **`jekyll-gh-pages.yml`** — GitHub’s starter “Jekyll with dependencies preinstalled” template: build the repository root with `actions/jekyll-build-pages` and deploy `_site` (added in `8a8e8f2`). There is no `Gemfile` / `_config.yml` in this repo; Jekyll uses defaults and treats `README.md` as the home page.
 
-**Not related** to the Changesets Action runtime (`src/`, `action.yml`, release/CI workflows).
-
-**Live URL (this fork):** https://garlobrian52.github.io/action/
+Only one deployment is live at a time. Whichever workflow finishes last wins the public URL.
 
 ---
 
-## 2. Triggers (verified in workflow)
+## 2. Workflow A — static `website/` (`deploy-pages.yml`)
+
+### Triggers (verified in workflow)
 
 | Trigger | When it runs |
 |---------|----------------|
 | `push` to `main` | Only if changed paths match `website/**` **or** `.github/workflows/deploy-pages.yml` |
-| `workflow_dispatch` | Manual run from the Actions UI (any path filter ignored) |
+| `workflow_dispatch` | Manual run from the Actions UI (path filter ignored) |
 
-Pushes that only touch Action source (`src/`, tests, etc.) do **not** redeploy Pages.
+Pushes that only touch Action source (`src/`, tests, etc.) do **not** trigger this workflow (they **do** trigger the Jekyll workflow — see below).
 
----
-
-## 3. Permissions, concurrency, environment
+### Permissions, concurrency, environment
 
 ```yaml
 permissions:
@@ -42,49 +52,39 @@ concurrency:
 
 - **`pages: write` + `id-token: write`** — required for `actions/deploy-pages` (OIDC to Pages).
 - **`contents: read`** — checkout only; the job does not push commits.
-- **Concurrency group `pages`** — a newer run cancels an in-flight deploy so only one deploy applies at a time.
-- **Environment `github-pages`** — GitHub’s Pages environment; the job URL is set from `steps.deployment.outputs.page_url`.
+- **Concurrency group `pages`** — shared with the Jekyll workflow. This workflow sets `cancel-in-progress: true` (cancels an in-flight run in the same group).
+- **Environment `github-pages`** — job URL from `steps.deployment.outputs.page_url`.
 
-These permissions are enough to **deploy** an already-enabled Pages site. They are **not** enough for `actions/configure-pages` to create/enable Pages via the API (see pitfalls).
+These permissions are enough to **deploy** an already-enabled Pages site. They are **not** enough to create/enable Pages via the API.
 
----
-
-## 4. Deploy pipeline (codepath)
+### Deploy pipeline (codepath)
 
 Single job `deploy` on `ubuntu-latest`:
 
 | Step | Action | Role |
 |------|--------|------|
-| 1 | `actions/checkout@v4` | Check out the commit that triggered the workflow |
-| 2 | `actions/configure-pages@v5` | Read/configure Pages settings for the deploy (no `enablement` input) |
-| 3 | `actions/upload-pages-artifact@v3` with `path: website` | Upload the **`website/` directory contents** as the Pages artifact (not the whole repo) |
-| 4 | `actions/deploy-pages@v4` (`id: deployment`) | Publish the artifact; expose `page_url` |
+| 1 | `actions/checkout@v4` | Check out the triggering commit |
+| 2 | `actions/configure-pages@v5` | Read Pages metadata (no `enablement` input → default `false`) |
+| 3 | `actions/upload-pages-artifact@v3` with `path: website` | Upload **`website/`** contents as the artifact |
+| 4 | `actions/deploy-pages@v4` (`id: deployment`) | Publish; expose `page_url` |
 
-There is **no build step** (no Node/yarn). Whatever is committed under `website/` is what goes live.
+No Node/yarn build. Whatever is committed under `website/` is what goes live when this workflow wins.
 
----
+### Runbook
 
-## 5. Operational runbook
-
-### One-time: enable GitHub Pages
-
-Pages must be enabled **manually** once before the workflow can succeed:
+**One-time: enable GitHub Pages** (required before either workflow can succeed):
 
 1. Repo **Settings → Pages**.
-2. Set **Source** to **GitHub Actions** (not a branch/`/docs` folder deploy).
-3. Save. Subsequent workflow runs can deploy without elevated API access.
+2. Set **Source** to **GitHub Actions**.
+3. Save.
 
-### After merging website changes
+**After merging `website/` changes:**
 
 1. Merge to `main` with paths under `website/**` (or the workflow file).
-2. Open **Actions → “Deploy website to GitHub Pages”** and confirm the run succeeds.
-3. Open the environment URL from the job summary / `page_url`, or https://garlobrian52.github.io/action/.
+2. Confirm **Actions → “Deploy website to GitHub Pages”** succeeds.
+3. If a concurrent Jekyll deploy also ran (any push to `main`), re-check the live URL — Jekyll may have overwritten it. Prefer `workflow_dispatch` on this workflow after Jekyll settles, or disable/remove the Jekyll workflow if `website/` should stay canonical.
 
-### Manual redeploy
-
-Use **Actions → Deploy website to GitHub Pages → Run workflow** (`workflow_dispatch`) when you need a republish without a `website/` path change (e.g. after fixing Pages settings).
-
-### Local preview (before push)
+**Local preview:**
 
 ```bash
 python3 -m http.server 8080 --directory website
@@ -93,24 +93,95 @@ python3 -m http.server 8080 --directory website
 
 ---
 
-## 6. Constraints and pitfalls
+## 3. Workflow B — Jekyll repo root (`jekyll-gh-pages.yml`)
 
-1. **Path filters** — Editing only `README.md` or `src/` will not trigger deploy. Touch `website/**` or run `workflow_dispatch`.
-2. **Project-site base path** — Hosted at `/action/` on `*.github.io`. Current `website/index.html` uses absolute `https://www.tradeweb.com/...` links and inline CSS only, so it works under that base path. If you later add root-relative asset URLs (`/styles.css`), they will break on project Pages—prefer relative paths or keep assets inline.
-3. **Artifact root is `website/`** — `index.html` must live at `website/index.html` so it becomes the site root. Nested-only content without a root `index.html` yields a directory listing or 404.
-4. **Do not set `enablement: true` on `configure-pages`** — That input asks the action to create/enable a Pages site via the API. The default `GITHUB_TOKEN` cannot do that and fails with `Resource not accessible by integration`. Enable Pages once in **Settings → Pages** instead (PR #5).
-5. **Pages not enabled / wrong source** — If configure or deploy fails after a fresh fork/clone, confirm Settings → Pages uses **GitHub Actions** as the source. Org policy can still block Pages entirely.
-6. **Cancel in progress** — Rapid successive pushes to `website/` may cancel earlier deploys; the latest run is the source of truth.
-7. **Separate from Node CI** — `.github/workflows/ci.yml` does not build or test the static site. Pages failures will not fail `yarn test` / typecheck.
+### Triggers (verified in workflow)
+
+| Trigger | When it runs |
+|---------|----------------|
+| `push` to `main` | **Every** push (no path filters) |
+| `workflow_dispatch` | Manual run |
+
+### Permissions, concurrency, environment
+
+Same permission trio as Workflow A. Differences:
+
+```yaml
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+```
+
+- Same group name `pages` as `deploy-pages.yml`, so the two workflows serialize against each other.
+- **`cancel-in-progress: false`** — an in-flight Jekyll deploy is **not** cancelled by a newer run in the group (unlike Workflow A).
+- Split into **`build`** then **`deploy`** (`needs: build`); deploy uses environment `github-pages`.
+
+### Build / deploy pipeline (codepath)
+
+| Job | Step | Action | Role |
+|-----|------|--------|------|
+| `build` | Checkout | `actions/checkout@v4` | Check out `main` |
+| `build` | Setup Pages | `actions/configure-pages@v5` | Pages metadata (`enablement` default `false`) |
+| `build` | Build | `actions/jekyll-build-pages@v1` with `source: ./`, `destination: ./_site` | Docker Jekyll build of repo root |
+| `build` | Upload | `actions/upload-pages-artifact@v3` | Upload `_site` (default artifact path for this action) |
+| `deploy` | Deploy | `actions/deploy-pages@v5` (`id: deployment`) | Publish artifact |
+
+Verified constraints:
+
+- No `Gemfile` or `_config.yml` in the repo; the action’s image supplies the GitHub Pages gem set and default config.
+- Home page content comes from root `README.md` (live title: “Changesets Release Action”).
+- Styles are served from `/action/assets/css/style.css` (theme assets from the Jekyll build).
+
+### Runbook
+
+1. Ensure Pages source is **GitHub Actions** (same one-time setup as above).
+2. Any merge to `main` triggers a build+deploy.
+3. Inspect **Actions → “Deploy Jekyll with GitHub Pages dependencies preinstalled”**.
+4. Spot-check https://garlobrian52.github.io/action/ — expect README content, not the Tradeweb HTML.
+
+To stop overwriting `website/`, either delete/disable this workflow, or add path filters / remove the deploy job. Keeping both without coordination will keep flipping the public site.
 
 ---
 
-## 7. Editing checklist
+## 4. `configure-pages` / `enablement` (verified)
 
-When changing deploy behavior:
+From [`actions/configure-pages@v5` `action.yml`](https://github.com/actions/configure-pages/blob/v5/action.yml):
 
-1. Edit `.github/workflows/deploy-pages.yml` and keep path filters aligned with the artifact `path:`.
-2. Prefer official `actions/*-pages@v*` majors already pinned unless upgrading intentionally.
-3. Do **not** re-add `enablement: true` to `actions/configure-pages` unless you have a token with Pages administration rights and intentionally want API enablement.
-4. After changing the workflow, merge to `main` (path filter includes the workflow file) or use `workflow_dispatch` to verify.
-5. Spot-check the live URL after deploy, not only the Actions green check.
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `enablement` | `'false'` | When `true`, try to **create/enable** the Pages site via API. Requires a token other than the default `GITHUB_TOKEN` (PAT with `repo` / Pages write, or App with `administration:write` + `pages:write`). |
+
+Implications for this repo:
+
+1. **Omitting `enablement` is already “off”.** Explicit `enablement: false` (as proposed in PR #10) matches the default; it does not change runtime behavior on v5.
+2. **`enablement: true` with `GITHUB_TOKEN` fails create.** Observed on the first Pages deploy (PR #4 era):  
+   `Create Pages site failed. Error: Resource not accessible by integration`.
+3. **With enablement off, missing Pages config fails get.** After PR #5 removed `enablement: true`, the next run logged `enablement: false` and failed with:  
+   `Get Pages site failed. … Error: Not Found`  
+   until Pages was enabled under **Settings → Pages** with source **GitHub Actions**.
+4. Do **not** re-add `enablement: true` unless you intentionally supply a privileged token and want API enablement.
+
+---
+
+## 5. Shared constraints and pitfalls
+
+1. **Two publishers, one URL** — Last successful deploy wins. Jekyll runs on every `main` push; static `website/` only on path matches or manual dispatch.
+2. **Shared concurrency group `pages`** — Workflows interact. Differing `cancel-in-progress` settings mean a static deploy can cancel another `pages` run, but Jekyll will not cancel in-flight peers.
+3. **Path filters (static only)** — Editing only `README.md` or `src/` does not trigger `deploy-pages.yml`, but **does** trigger Jekyll and can replace the Tradeweb site with README HTML.
+4. **Project-site base path** — Hosted at `/action/` on `*.github.io`. Tradeweb `website/index.html` uses absolute Tradeweb.com links and inline CSS. Jekyll assets use `/action/...` paths from the theme.
+5. **Artifact root (static)** — For Workflow A, `index.html` must be at `website/index.html`.
+6. **No Jekyll project files** — Workflow B is a stock template against a Node action repo. It “works” by rendering markdown; it is not a purposeful docs site layout.
+7. **Separate from Node CI** — `.github/workflows/ci.yml` does not build or test either Pages path.
+8. **Node 20 deprecation warnings** — Recent runs warn that `configure-pages@v5` / related actions still declare Node 20 while the runner forces Node 24. Cosmetics for now; watch upstream majors.
+
+---
+
+## 6. Editing checklist
+
+When changing Pages behavior:
+
+1. Decide which publisher is canonical (`website/` vs Jekyll README) and disable or path-filter the other.
+2. Keep concurrency group names intentional if both remain; document any rename.
+3. Prefer official `actions/*-pages@v*` / `jekyll-build-pages@v*` majors already pinned unless upgrading on purpose (`deploy-pages` is `@v4` in Workflow A and `@v5` in Workflow B today).
+4. Never set `enablement: true` on `configure-pages` with the default `GITHUB_TOKEN`.
+5. After workflow edits, use `workflow_dispatch` or a matching path push, then verify the **live URL** content—not only a green Actions check.
