@@ -15,7 +15,10 @@ inputs:
     description: "The command to update version, edit CHANGELOG, read and delete changesets. Default to `changeset version` if not provided"
     required: false
   cwd:
-    description: Sets the cwd for the node process. Default to `process.cwd()`
+    description: >
+      Working directory for git operations and the publish script (path.resolve).
+      Does not change process.cwd(); the entrypoint's initial changeset read and
+      version path still use the job working directory. Default: process.cwd().
     required: false
   commit:
     description: |

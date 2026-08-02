@@ -12,9 +12,9 @@ This action for [Changesets](https://github.com/changesets/changesets) creates a
 - commit - The commit message to use. Default to `Version Packages`
 - title - The pull request title. Default to `Version Packages`
 - setupGitUser - Sets up the git user for commits as `"github-actions[bot]"`. Default to `true`
-- createGithubReleases - A boolean value to indicate whether to create Github releases after `publish` or not. Default to `true`
+- createGithubReleases - When `true` (default), after a successful publish the action pushes git tags and creates GitHub Releases from changelog entries. When `false`, the action skips **both** tag pushes and GitHub Release creation (your publish script must handle tags if you still need them).
 - commitMode - Specifies the commit mode. Use `"git-cli"` to push changes using the Git CLI, or `"github-api"` to push changes via the GitHub API. When using `"github-api"`, all commits and tags are GPG-signed and attributed to the user or app who owns the `GITHUB_TOKEN`. Default to `git-cli`.
-- cwd - Changes node's `process.cwd()` if the project is not located on the root. Default to `process.cwd()`
+- cwd - Working directory passed to git operations and the `publish` script (resolved with `path.resolve`). Does **not** call `process.chdir`. The initial changeset read and the version path from the entrypoint still use the job’s `process.cwd()`, so keep `.changeset/` at the job working directory unless you only need `cwd` for publish/git scoping. Default: `process.cwd()`.
 - branch - Branch the action treats as the release base (version PR targets this branch; version branch is `changeset-release/<branch>`). Defaults to the current branch from `github.context.ref` with the `refs/heads/` prefix removed.
 
 ### Outputs

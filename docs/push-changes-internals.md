@@ -123,6 +123,28 @@ This is GitHub's official [Commits API](https://docs.github.com/en/graphql/refer
 
 - **`pushChanges`** is called during `runVersion` to push the version-bump commit to the PR branch (`changeset-release/<branch>`).
 - **Existing PR fetch before push** — `runVersion` lists open PRs for `head: owner:changeset-release/<branch>` **before** `pushChanges`. With `commitMode: github-api`, `@changesets/ghcommit` may reset the remote branch to the base SHA (which would otherwise close the PR); keeping the PR number and calling `pulls.update` with `state: "open"` reopens/updates it (#488). Full version-PR lifecycle: [`action-runtime.md`](./action-runtime.md) §5.
-- **`pushTag`** is called during `runPublish` to tag releases after stdout `New tag:` detection:
-  - git-cli: `git push origin <tag>`
-  - github-api: `octokit.rest.git.createRef({ ref: "refs/tags/<tag>", sha: github.context.sha })`
+
+---
+
+## 5. `pushTag` — publish-time tags (`src/git.ts`)
+
+Called from `runPublish` **only when** `createGithubReleases` is `true` (default). Setting `createGithubReleases: false` skips **both** tag creation/push by the action **and** `repos.createRelease`.
+
+| Mode | Behavior |
+|------|----------|
+| **git-cli** | `git push origin <tag>` in `cwd`. Expects the publish script (e.g. `changeset publish` / `changeset tag`) to have created the local tag already. |
+| **github-api** | `octokit.rest.git.createRef({ ref: "refs/tags/<tag>", sha: github.context.sha })`. The tag always points at the **workflow triggering commit** (`github.context.sha`), not at a commit the publish script may have created afterward. |
+
+### Tag name conventions (chosen in `runPublish`, not in `pushTag`)
+
+| Package layout (`@manypkg/get-packages` `tool`) | Tag name |
+|------------------------------------------------|----------|
+| Non-root (monorepo) | `{packageName}@{version}` |
+| Root | `v{version}` |
+
+### Pitfalls
+
+1. **`createGithubReleases: false` disables action tag pushes** — if you rely on the action (not your script) to publish tags, leave it `true` or push tags in `publish`.
+2. **github-api tags `github.context.sha`** — correct when publish does not create a new git commit; wrong if your publish script commits first and you expected the tag on that new commit.
+3. **createRef failures are warnings** — `.catch` logs `Failed to create tag …` and continues (assumes a custom publish script already pushed the tag). `createRelease` still runs afterward.
+4. **git-cli missing local tag** — `git push origin <tag>` fails the step if the tag was never created locally.
