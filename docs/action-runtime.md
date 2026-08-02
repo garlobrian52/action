@@ -36,7 +36,7 @@ After #486 the action no longer calls `process.chdir`. `cwd` is passed explicitl
 | Initial `readChangesetState()` (dispatch) | **No** — defaults to `process.cwd()` |
 | `runVersion(...)` from `index.ts` | **No** — defaults to `process.cwd()` |
 
-`runVersion` itself accepts `cwd` and tests pass it; the entrypoint currently omits it. The README line “changes node’s `process.cwd()`” is outdated. Prefer keeping the package root (and `.changeset/`) at the Actions job working directory, or treat non-root `cwd` as best-effort for publish/git only.
+`runVersion` itself accepts `cwd` and tests pass it; the entrypoint currently omits it. README / `action.yml` describe this pass-through accurately (post-#486 / docs PR #14). Prefer keeping the package root (and `.changeset/`) at the Actions job working directory, or treat non-root `cwd` as best-effort for publish/git only.
 
 ---
 
@@ -89,13 +89,22 @@ The Version Packages PR is always `head: changeset-release/<branch>` → `base: 
 2. **`git.prepareBranch(versionBranch)`** — git-cli: checkout/create + hard reset to `github.context.sha`; github-api: no-op.
 3. Snapshot package versions (`getVersionsByDirectory`) **before** versioning.
 4. Run version command:
-   - Custom `version` input → split on whitespace, `exec` with `GITHUB_TOKEN` in env.
+   - Custom `version` input → `script.split(/\s+/)` then `exec` with `GITHUB_TOKEN` in env (no shell; quoted args with spaces will not work as a single argv).
    - Default → resolve `@changesets/cli` from `cwd`; if CLI `< 2.0.0` run `bump`, else `version`. Missing CLI → clear error asking to install `@changesets/cli`.
 5. Diff package versions → `getChangedPackages`; for each, read `CHANGELOG.md` and extract the entry for the new version (`getChangelogEntry` in `src/utils.ts`).
 6. **List open PRs** for `owner:versionBranch` → `base` **before** pushing (see below).
 7. **`git.pushChanges`** with commit message `commit` input (default `Version Packages`), plus ` (preState.tag)` when in pre mode.
 8. Build PR body (`getVersionPrBody`), sort packages (public before private; higher bump first).
-9. Create PR or update the first existing open PR (`state: "open"`).
+9. Create PR, or update **only the first** open PR returned by the list (`existingPullRequests.data[0]`, forced `state: "open"`). Extra open PRs for the same head/base are ignored.
+
+### Version-path pitfalls
+
+| Situation | Actual behavior |
+|-----------|-----------------|
+| Custom `version` / `publish` with shell metacharacters | Split on whitespace only — not run through a shell. Prefer a package.json script (`yarn version`) over inline `bash -c "…"`. |
+| Version script leaves no package version diffs | PR is still created/updated; `# Releases` has no package sections. |
+| Changed package missing `CHANGELOG.md` | `runVersion` throws on `readFile` (unlike publish `createRelease`, which skips `ENOENT`). |
+| Several open Version Packages PRs for the same head | Only `data[0]` is updated/reopened; others stay stale. |
 
 ### Why list PRs before push
 
@@ -120,12 +129,14 @@ GitHub rejects bodies over **65536** characters. The action caps at **`MAX_CHARA
 
 When `preState` is set, the body includes a warning that `branch` is in pre mode and how to exit (`changeset pre exit` on that branch).
 
-### Changelog parsing constraints (`getChangelogEntry`)
+### Changelog parsing constraints (`getChangelogEntry` in `src/utils.ts`)
 
-- Finds a markdown heading whose text **exactly equals** the new version string.
+- Finds a markdown heading whose text **exactly equals** the new version string (e.g. `3.0.1`, not `v3.0.1`).
 - Slices until the next heading of the **same depth**.
-- Scans `major` / `minor` / `patch` in headings to compute `highestLevel` for sort order.
-- Missing `CHANGELOG.md` for a changed package will throw when reading the file (version PR assembly expects changelogs unless the package did not change version).
+- While walking that slice, headings containing `major` / `minor` / `patch` update `highestLevel` for `sortTheThings` (public packages before private; higher bump first).
+- **Always returns** `{ content, highestLevel }` — never `null` / `undefined`.
+- If the version heading is **missing**, `content` is the **entire** changelog AST stringified (no slice), and `highestLevel` reflects `major`/`minor`/`patch` headings anywhere in the file.
+- Version path: missing `CHANGELOG.md` for a changed package throws on `readFile`. Publish path: see §6.
 
 ---
 
@@ -136,11 +147,12 @@ Runs only from the dispatch publish case (no remaining changesets + `publish` in
 1. Execute the `publish` script (`script.split(/\s+/)`), injecting `GITHUB_TOKEN` into the child env.
 2. Parse **stdout** for new tags (not git tags on disk):
    - **Monorepo / non-root tool:** lines matching `New tag:\s+(@[^/]+\/[^@]+|[^/]+)@([^\s]+)`.
-   - **Root package:** first line matching `New tag:` → treat the single root package as released; GitHub tag name `v{version}`.
+   - **Root package:** first line matching `New tag:` → treat the single root package as released; GitHub tag name `v{version}` (then `break` — further `New tag:` lines ignored).
 3. If `createGithubReleases` is true (default) and packages were detected:
    - Push each tag via `git.pushTag` (see [`push-changes-internals.md`](./push-changes-internals.md) §5 — github-api tags `github.context.sha`; failures only warn).
-   - `repos.createRelease` with body from that version’s changelog entry; `prerelease` when the version contains `-`.
-   - Missing changelog file → skip that release silently (`ENOENT`); missing entry for the version → throw.
+   - `repos.createRelease` with `body` from `getChangelogEntry(...).content`; `prerelease` when the version contains `-`.
+   - Missing changelog file → skip that package’s release silently (`ENOENT`).
+   - Missing version heading → **does not throw**. `getChangelogEntry` still returns an object, so the Release body can be the **full** changelog. The `if (!changelogEntry)` check in `createRelease` is unreachable with the current helper.
 4. If `createGithubReleases` is false → **no** `pushTag` and **no** GitHub Release, even when `New tag:` lines were parsed. `published` / `publishedPackages` still reflect stdout detection.
 
 If stdout has no `New tag:` lines, result is `{ published: false }` and outputs stay at the startup defaults. Your publish script must print `New tag: …` (changeset publish does) or the action will not treat the run as published.
