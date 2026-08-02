@@ -2,7 +2,8 @@
 
 Engineering notes for token resolution and npm auth in `src/index.ts` / `src/run.ts` (behavior shipped for `@changesets/action@1.7.0`).
 
-User-facing examples live in the root [`README.md`](../README.md).
+User-facing examples live in the root [`README.md`](../README.md).  
+Dispatch / version-PR / publish detection: [`action-runtime.md`](./action-runtime.md).
 
 ---
 
@@ -85,4 +86,5 @@ Auth-line detection matches npm CLI style: `/^\s*\/\/registry\.npmjs\.org\/:[_-]
 | `action.yml` → `github-token` | Default `${{ github.token }}` |
 | `src/index.ts` | Token resolve, `.netrc`, `.npmrc` / OIDC branch, dispatch publish vs version |
 | `src/run.ts` → `runPublish` / `runVersion` | Inject `GITHUB_TOKEN` into script env |
+| `docs/action-runtime.md` | When the action publishes, opens a PR, or exits |
 | `docs/push-changes-internals.md` | How commits are pushed after versioning |
