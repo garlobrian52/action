@@ -2,9 +2,7 @@
 
 Engineering notes for the Changesets Release Action control flow in `src/index.ts` and `src/run.ts`.
 
-User-facing usage: [`README.md`](../README.md).  
-Auth / npm: [`auth-and-publishing.md`](./auth-and-publishing.md).  
-How version commits are pushed: [`push-changes-internals.md`](./push-changes-internals.md).
+Related docs: [`README.md`](../README.md) (usage) · [`auth-and-publishing.md`](./auth-and-publishing.md) · [`push-changes-internals.md`](./push-changes-internals.md) · [`troubleshooting.md`](./troubleshooting.md).
 
 ---
 
@@ -140,11 +138,12 @@ Runs only from the dispatch publish case (no remaining changesets + `publish` in
    - **Monorepo / non-root tool:** lines matching `New tag:\s+(@[^/]+\/[^@]+|[^/]+)@([^\s]+)`.
    - **Root package:** first line matching `New tag:` → treat the single root package as released; GitHub tag name `v{version}`.
 3. If `createGithubReleases` is true (default) and packages were detected:
-   - Push each tag via `git.pushTag`.
+   - Push each tag via `git.pushTag` (see [`push-changes-internals.md`](./push-changes-internals.md) §5 — github-api tags `github.context.sha`; failures only warn).
    - `repos.createRelease` with body from that version’s changelog entry; `prerelease` when the version contains `-`.
    - Missing changelog file → skip that release silently (`ENOENT`); missing entry for the version → throw.
+4. If `createGithubReleases` is false → **no** `pushTag` and **no** GitHub Release, even when `New tag:` lines were parsed. `published` / `publishedPackages` still reflect stdout detection.
 
-If stdout has no `New tag:` lines, result is `{ published: false }` and outputs stay at the startup defaults.
+If stdout has no `New tag:` lines, result is `{ published: false }` and outputs stay at the startup defaults. Your publish script must print `New tag: …` (changeset publish does) or the action will not treat the run as published.
 
 ---
 
