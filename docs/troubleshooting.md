@@ -22,7 +22,9 @@ Deeper notes: [`action-runtime.md`](./action-runtime.md) · [`auth-and-publishin
 |---------|--------------|---------------|
 | Custom step `if: hasChangesets == 'false'` never runs | Empty-changeset skip left `hasChangesets=true` | See §1; empty changesets block both the Version PR and this pattern. |
 | Action ran publish script but `published` is `false` | Stdout had no `New tag:` lines | Detection parses **stdout only**. Monorepo lines must match `New tag: name@version`; root needs any `New tag:` line. |
+| Publish throws `Package "…" not found` | Monorepo `New tag:` name not in `getPackages(cwd)` | Typo, wrong `cwd`, or private/tooling package filtered from the workspace. |
 | npm 401 / auth errors | Token or OIDC misconfigured | [`auth-and-publishing.md`](./auth-and-publishing.md): `NPM_TOKEN` vs trusted publishing (`id-token: write`), custom registries need your own `.npmrc`. |
+| Later step lost other `.netrc` machines | Action `writeFile`s `$HOME/.netrc` every run | [`auth-and-publishing.md`](./auth-and-publishing.md) §2 — recreate multi-host `.netrc` after the action if needed. |
 
 ---
 
@@ -62,6 +64,9 @@ Tag names: monorepo `{name}@{version}`; root package `v{version}`. Details: [`pu
 | `version: bash -c "…"` mis-parses | `script.split(/\s+/)` — no shell | Use a package.json script, or a single command + simple argv. |
 | PR opens with empty `# Releases` | Version command changed no `package.json` versions | `getChangedPackages` compares versions before/after the version command. |
 | Duplicate open Version Packages PRs; only one updates | List returns multiple; action updates `data[0]` only | Close extras; keep a single `changeset-release/<branch>` PR. |
+| PR diff suddenly empty / PR auto-closed (`commitMode: git-cli`) | Version script left a **clean** tree after `prepareBranch` reset | git-cli still **force-pushes** HEAD; without a new commit that is the base SHA. See [`push-changes-internals.md`](./push-changes-internals.md) §1. |
+| Package order in `# Releases` looks wrong | `highestLevel` saw `Major`/`Minor`/`Patch` headings **above** the version entry | Newest-first changelogs can inflate sort order for older entries; body `content` can still be correct. [`action-runtime.md`](./action-runtime.md) §5. |
+| No `(tag)` suffix / pre warning after `changeset pre exit` | `readChangesetState` only returns `preState` when `mode === "pre"` | Expected; exit mode is treated as normal releases. |
 
 See [`action-runtime.md`](./action-runtime.md) §5.
 

@@ -29,13 +29,30 @@ If both are empty, the action fails with: `Please add the GITHUB_TOKEN to the ch
 ### Where the token is used
 
 1. **Octokit** — `setupOctokit(githubToken)` for PRs, releases, and (with `commitMode: github-api`) commits/tags.
-2. **`.netrc`** — written as `password` for `github.com` so git-cli pushes authenticate.
+2. **`.netrc`** — always rewritten (see below) so git-cli pushes authenticate to `github.com`.
 3. **Child env** — `runPublish` / `runVersion` pass `GITHUB_TOKEN: githubToken` into the publish/version script env so nested tools see the same token even when the workflow did not set `env.GITHUB_TOKEN`.
+
+### `.netrc` rewrite (always)
+
+Before reading changesets, `src/index.ts` does `fs.writeFile` on `$HOME/.netrc` with:
+
+```
+machine github.com
+login github-actions[bot]
+password <githubToken>
+```
+
+| Constraint | Detail |
+|------------|--------|
+| **Overwrite, not merge** | `writeFile` replaces the whole file. Other `machine` entries that were in `.netrc` are lost for the rest of the job. |
+| **Login name is fixed** | Always `github-actions[bot]`; auth is the password token. Works for `github.token` and PATs; attribution of API commits still follows the token owner when using `commitMode: github-api`. |
+| **git-cli only needs this** | `commitMode: github-api` still writes `.netrc`, but pushes go through Octokit, not `git push`. |
 
 ### Constraints
 
 - Default `github.token` permissions depend on the workflow `permissions:` block. Opening/updating release PRs typically needs `contents: write` and `pull-requests: write`.
 - Prefer a PAT / GitHub App token via `github-token` (or `GITHUB_TOKEN` env) when you need to trigger other workflows (`github.token` often cannot).
+- If a prior step needs a multi-host `.netrc`, recreate it **after** this action (or avoid sharing that file across steps that must keep other machines).
 
 ---
 
