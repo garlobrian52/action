@@ -19,7 +19,7 @@ Order in `src/index.ts`:
 1. Resolve GitHub token (`GITHUB_TOKEN` env, else `github-token` input). Fail if empty.
 2. Resolve `cwd` via `path.resolve(cwd input || "")`, validate `commitMode` (`git-cli` | `github-api`), construct `Git` with that `cwd` (+ Octokit when `github-api`).
 3. Optionally `setupGitUser` (`true` by default).
-4. Write `$HOME/.netrc` for `github.com` so git-cli pushes authenticate.
+4. **Overwrite** `$HOME/.netrc` with a single `github.com` machine (`login github-actions[bot]`, password = token) so git-cli pushes authenticate — see [`auth-and-publishing.md`](./auth-and-publishing.md) §2.
 5. `readChangesetState()` → filtered `changesets` list (see §3).
 6. Set outputs early: `published=false`, `publishedPackages=[]`, `hasChangesets=<bool>`.
 
