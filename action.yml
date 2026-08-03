@@ -32,7 +32,11 @@ inputs:
     required: false
     default: true
   createGithubReleases:
-    description: "A boolean value to indicate whether to create Github releases after `publish` or not"
+    description: >
+      When true (default), after a successful publish the action pushes git tags
+      and creates GitHub Releases from changelog entries. When false, skips both
+      tag pushes and GitHub Release creation (your publish script must handle
+      tags if you still need them).
     required: false
     default: true
   commitMode:

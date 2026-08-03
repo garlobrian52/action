@@ -87,7 +87,7 @@ Every Octokit instance is created with `@octokit/plugin-throttling`:
 | Primary rate limit | Warning; retry if `retryCount <= 2` after `retryAfter` seconds |
 | Secondary rate limit | Same retry policy |
 
-After three attempts the request fails. See [`troubleshooting.md`](./troubleshooting.md) §6.
+After three attempts the request fails. See [`troubleshooting.md`](./troubleshooting.md) §7.
 
 ---
 

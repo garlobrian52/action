@@ -47,13 +47,27 @@ After #486 the action does **not** call `process.chdir`.
 | Tag points at unexpected commit (`commitMode: github-api`) | `pushTag` uses `github.context.sha` | Tag is the workflow triggering SHA, not a commit your publish script created later. |
 | Warning `Failed to create tag …` then Release still appears | Tag already existed remotely | createRef errors are swallowed as warnings; `createRelease` still runs. |
 | git-cli: push tag failed | Local tag missing | Publish script must create the tag before the action pushes it. |
-| Release creation throws | Changelog has no heading equal to the version | Missing `CHANGELOG.md` skips that release (`ENOENT`); missing **entry** throws. |
+| Release body looks like the whole changelog | No heading text **exactly** equal to the version | `getChangelogEntry` always returns an object; missing heading does **not** throw — body becomes the full file. Fix changelog headings (plain version string). |
+| One package skipped, others released | That package has no `CHANGELOG.md` | `ENOENT` skips only that package’s GitHub Release; tags may still have been pushed for it. |
 
 Tag names: monorepo `{name}@{version}`; root package `v{version}`. Details: [`push-changes-internals.md`](./push-changes-internals.md) §5.
 
 ---
 
-## 5. `commitMode: github-api` issues
+## 5. Version Packages PR content / scripts
+
+| Symptom | Likely cause | What to check |
+|---------|--------------|---------------|
+| Version step fails reading `CHANGELOG.md` | Custom `version` bumped a package without writing its changelog | Version path requires a changelog file per changed package; publish `createRelease` is more lenient (`ENOENT` skip). |
+| `version: bash -c "…"` mis-parses | `script.split(/\s+/)` — no shell | Use a package.json script, or a single command + simple argv. |
+| PR opens with empty `# Releases` | Version command changed no `package.json` versions | `getChangedPackages` compares versions before/after the version command. |
+| Duplicate open Version Packages PRs; only one updates | List returns multiple; action updates `data[0]` only | Close extras; keep a single `changeset-release/<branch>` PR. |
+
+See [`action-runtime.md`](./action-runtime.md) §5.
+
+---
+
+## 6. `commitMode: github-api` issues
 
 | Symptom | Likely cause | What to check |
 |---------|--------------|---------------|
@@ -63,7 +77,7 @@ Tag names: monorepo `{name}@{version}`; root package `v{version}`. Details: [`pu
 
 ---
 
-## 6. GitHub API rate limits
+## 7. GitHub API rate limits
 
 `setupOctokit` (`src/octokit.ts`) uses `@octokit/plugin-throttling`:
 
@@ -75,7 +89,7 @@ Large monorepos with many Releases or frequent version-PR updates are the usual 
 
 ---
 
-## 7. Permissions quick checklist
+## 8. Permissions quick checklist
 
 Minimum for opening/updating the Version Packages PR with `github.token`:
 
