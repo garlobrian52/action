@@ -19,7 +19,7 @@ Order in `src/index.ts`:
 1. Resolve GitHub token (`GITHUB_TOKEN` env, else `github-token` input). Fail if empty.
 2. Resolve `cwd` via `path.resolve(cwd input || "")`, validate `commitMode` (`git-cli` | `github-api`), construct `Git` with that `cwd` (+ Octokit when `github-api`).
 3. Optionally `setupGitUser` (`true` by default).
-4. Write `$HOME/.netrc` for `github.com` so git-cli pushes authenticate.
+4. **Overwrite** `$HOME/.netrc` with a single `github.com` machine (`login github-actions[bot]`, password = token) so git-cli pushes authenticate — see [`auth-and-publishing.md`](./auth-and-publishing.md) §2.
 5. `readChangesetState()` → filtered `changesets` list (see §3).
 6. Set outputs early: `published=false`, `publishedPackages=[]`, `hasChangesets=<bool>`.
 
@@ -44,10 +44,12 @@ After #486 the action no longer calls `process.chdir`. `cwd` is passed explicitl
 
 | Condition | Returned `changesets` | Returned `preState` |
 |-----------|----------------------|---------------------|
-| Not in pre mode | All changesets from `@changesets/read` | `undefined` |
+| No pre-state file, or `preState.mode !== "pre"` (e.g. after `changeset pre exit`) | All changesets from `@changesets/read` | **`undefined`** (exit/other modes are not surfaced) |
 | `preState.mode === "pre"` | Changesets **whose ids are not** in `preState.changesets` | The pre-state object |
 
 Changesets already consumed into the current pre release are excluded. That can make `hasChangesets` false while files still exist under `.changeset/`, which is why a merge of a pre Version Packages PR can enter the publish path.
+
+**Pitfall:** Only `mode === "pre"` keeps `preState` for PR title/body suffixes and the pre-mode warning. After exit, `runVersion` treats the branch as normal releases even if a pre-state file still exists on disk.
 
 ---
 
@@ -132,11 +134,13 @@ When `preState` is set, the body includes a warning that `branch` is in pre mode
 ### Changelog parsing constraints (`getChangelogEntry` in `src/utils.ts`)
 
 - Finds a markdown heading whose text **exactly equals** the new version string (e.g. `3.0.1`, not `v3.0.1`).
-- Slices until the next heading of the **same depth**.
-- While walking that slice, headings containing `major` / `minor` / `patch` update `highestLevel` for `sortTheThings` (public packages before private; higher bump first).
+- Slices `content` from the node after that heading until the next heading of the **same depth**.
+- **`highestLevel` walk is not limited to that slice.** The helper scans headings from the **start of the file** until it hits the end of the version section (or EOF). Any heading whose text matches `/(major|minor|patch)/i` (e.g. `### Major Changes`) updates `highestLevel` for `sortTheThings` (public packages before private; higher bump first).
 - **Always returns** `{ content, highestLevel }` — never `null` / `undefined`.
-- If the version heading is **missing**, `content` is the **entire** changelog AST stringified (no slice), and `highestLevel` reflects `major`/`minor`/`patch` headings anywhere in the file.
+- If the version heading is **missing**, `content` is the **entire** changelog AST stringified (no slice), and `highestLevel` reflects those headings anywhere in the file.
 - Version path: missing `CHANGELOG.md` for a changed package throws on `readFile`. Publish path: see §6.
+
+**Ordering pitfall (newest-first changelogs):** for an older version entry, a *newer* section above it that contains `### Major Changes` (etc.) can inflate `highestLevel` even when the sliced `content` is only a patch. That only affects Version Packages PR package order, not Release bodies.
 
 ---
 
@@ -146,9 +150,11 @@ Runs only from the dispatch publish case (no remaining changesets + `publish` in
 
 1. Execute the `publish` script (`script.split(/\s+/)`), injecting `GITHUB_TOKEN` into the child env.
 2. Parse **stdout** for new tags (not git tags on disk):
-   - **Monorepo / non-root tool:** lines matching `New tag:\s+(@[^/]+\/[^@]+|[^/]+)@([^\s]+)`.
-   - **Root package:** first line matching `New tag:` → treat the single root package as released; GitHub tag name `v{version}` (then `break` — further `New tag:` lines ignored).
+   - **Monorepo / non-root tool:** lines matching `New tag:\s+(@[^/]+\/[^@]+|[^/]+)@([^\s]+)`. Name must exist in `getPackages(cwd)` or the action **throws** (`Package "<name>" not found`).
+   - **Root package:** first line matching `New tag:` → treat the single root package as released; GitHub tag name `v{version}` (then `break` — further `New tag:` lines ignored). Empty package list → throw `No package found.`
 3. If `createGithubReleases` is true (default) and packages were detected:
+   - **Monorepo:** `Promise.all` over released packages — each `pushTag` + `createRelease` runs concurrently.
+   - **Root:** sequential for the single matched package (loop breaks after the first `New tag:`).
    - Push each tag via `git.pushTag` (see [`push-changes-internals.md`](./push-changes-internals.md) §5 — github-api tags `github.context.sha`; failures only warn).
    - `repos.createRelease` with `body` from `getChangelogEntry(...).content`; `prerelease` when the version contains `-`.
    - Missing changelog file → skip that package’s release silently (`ENOENT`).

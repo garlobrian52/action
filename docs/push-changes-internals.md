@@ -27,11 +27,15 @@ async pushChanges({ branch, message }: { branch: string; message: string }) {
 
 3. **`commitAll` (lines 35–38)** — runs `git add .` followed by `git commit -m <message>` in `cwd`. This stages all changes (new/modified/deleted) and creates a local commit.
 
-4. **Always pushes** — regardless of whether a new commit was created, `push(branch, { cwd })` (lines 11–13) runs:
+4. **Always force-pushes** — regardless of whether a new commit was created, `push(branch, { cwd })` (lines 11–13) runs:
    ```
    git push origin HEAD:<branch> --force
    ```
-   This force-pushes the current HEAD to the remote branch. The force-push is safe here because `prepareBranch` (lines 94–101) has already reset the local branch to `github.context.sha`, so the only commit on the branch is the one just created.
+   `prepareBranch` (lines 94–101) has already checked out the version branch and `git reset --hard` to `github.context.sha`. So:
+   - **Dirty after version script** → `commitAll` creates one commit on top of that SHA, then force-pushes it (intended path).
+   - **Clean after version script** → no commit; force-push publishes the reset SHA itself. The remote `changeset-release/<branch>` tip becomes identical to the release base commit, which can **empty the PR diff** and let GitHub auto-close the Version Packages PR.
+
+   Treat a no-op version script (no `package.json` / changelog edits) as a real failure mode on git-cli, not a no-op.
 
 ---
 
@@ -112,7 +116,7 @@ This is GitHub's official [Commits API](https://docs.github.com/en/graphql/refer
 | **Signing** | Unsigned (unless runner is configured for GPG signing externally) | **GPG-signed by GitHub** automatically (server-side commits are always signed) |
 | **`setupUser`** | Configures `user.name`/`user.email` for git commits | **No-op** — returns immediately when `this.octokit` is set (line 59–61) |
 | **`prepareBranch`** | Checks out (or creates) branch locally, then `git reset --hard` to `github.context.sha` | **No-op** — returns immediately (lines 95–98); branch creation/update is handled server-side by the API |
-| **Dirty-check** | Explicit: runs `git status --porcelain`; skips commit if clean | Implicit: `isomorphic-git.walk` diffs working tree vs base; if no changes detected, `fileChanges` will be empty |
+| **Dirty-check** | Explicit: `git status --porcelain`; skips commit if clean, **still force-pushes** (see pitfall above) | Implicit: `isomorphic-git.walk` diffs working tree vs base; empty `fileChanges` means no new commit via the API (branch may still be force-aligned to `baseOid` when diverged) |
 | **Push method** | `git push origin HEAD:<branch> --force` | `updateRefMutation` with `force: true` (if branch diverged from base), then `createCommitOnBranch` which advances the ref |
 | **File scoping** | `git add .` stages everything in `cwd` and below | `isomorphic-git` walk filtered to paths starting with `relative(repoRoot, cwd)` |
 | **Limitations** | None for standard files | Unchanged committed symlinks/executables are OK; **changing** them still fails (GitHub API limitation) — use `git-cli` |
