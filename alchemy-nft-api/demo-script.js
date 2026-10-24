@@ -65,9 +65,25 @@ function printOwnedNftSummary(nfts) {
     console.log(`- Name: ${nft.name || nft.title || "unavailable"}`);
     console.log(`- Token type: ${nft.tokenType || nft.contract?.tokenType || "unavailable"}`);
     console.log(
-      `- Image: ${nft.image?.originalUrl || nft.image?.cachedUrl || nft.raw?.metadata?.image || "unavailable"}`
+      `- Image: ${formatForDisplay(
+        nft.image?.originalUrl || nft.image?.cachedUrl || nft.raw?.metadata?.image || "unavailable"
+      )}`
     );
   }
+}
+
+function formatForDisplay(value, maxLength = 120) {
+  if (value === undefined || value === null) {
+    return "unavailable";
+  }
+
+  const stringValue = typeof value === "string" ? value : JSON.stringify(value);
+
+  if (stringValue.length <= maxLength) {
+    return stringValue;
+  }
+
+  return `${stringValue.slice(0, maxLength)}...`;
 }
 
 async function main() {
@@ -106,13 +122,14 @@ async function main() {
   console.log(`- Contract: ${metadataResponse.contract?.address || "unknown"}`);
   console.log(`- Token ID: ${metadataResponse.tokenId || firstNft.tokenId}`);
   console.log(`- Token type: ${metadataResponse.tokenType || "unavailable"}`);
-  console.log(`- Token URI: ${metadataResponse.tokenUri || metadataResponse.raw?.tokenUri || "unavailable"}`);
+  console.log(`- Token URI: ${formatForDisplay(metadataResponse.tokenUri || metadataResponse.raw?.tokenUri)}`);
   console.log(
     `- Image URL: ${
-      metadataResponse.image?.originalUrl ||
-      metadataResponse.image?.cachedUrl ||
-      metadataResponse.raw?.metadata?.image ||
-      "unavailable"
+      formatForDisplay(
+        metadataResponse.image?.originalUrl ||
+          metadataResponse.image?.cachedUrl ||
+          metadataResponse.raw?.metadata?.image
+      )
     }`
   );
   console.log(`- Last updated: ${metadataResponse.timeLastUpdated || "unavailable"}`);
