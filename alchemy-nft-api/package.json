@@ -1,0 +1,23 @@
+{
+  "name": "alchemy-nft-api",
+  "version": "1.0.0",
+  "description": "Alchemy NFT API quickstart demo for Ethereum Mainnet",
+  "main": "demo-script.js",
+  "scripts": {
+    "start": "node demo-script.js",
+    "test": "node demo-script.js --help"
+  },
+  "keywords": [],
+  "keywords": [
+    "alchemy",
+    "nft",
+    "ethereum",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.9"
+  }
+}
