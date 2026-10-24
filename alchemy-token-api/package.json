@@ -1,0 +1,22 @@
+{
+  "name": "alchemy-token-api",
+  "version": "1.0.0",
+  "description": "Alchemy Token API quickstart demo for Ethereum Mainnet",
+  "main": "demo-script.js",
+  "scripts": {
+    "start": "node demo-script.js",
+    "test": "node demo-script.js --help"
+  },
+  "keywords": [
+    "alchemy",
+    "token",
+    "ethereum",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.9"
+  }
+}
