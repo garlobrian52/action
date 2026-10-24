@@ -1,0 +1,22 @@
+{
+  "name": "alchemy-node-rpc",
+  "version": "1.0.0",
+  "description": "Alchemy Ethereum Mainnet JSON-RPC demo for Node.js",
+  "main": "demo-script.js",
+  "scripts": {
+    "start": "node demo-script.js",
+    "test": "node demo-script.js --help"
+  },
+  "keywords": [
+    "alchemy",
+    "ethereum",
+    "json-rpc",
+    "rpc"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.9"
+  }
+}
