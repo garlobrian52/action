@@ -12,6 +12,7 @@ Optional overrides:
 ALCHEMY_OWNER=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
 ALCHEMY_PAGE_SIZE=100
 ALCHEMY_WITH_METADATA=true
+ALCHEMY_DISPLAY_LIMIT=10
 `;
 
 if (process.argv.includes("--help")) {
@@ -21,8 +22,9 @@ if (process.argv.includes("--help")) {
 
 const apiKey = process.env.ALCHEMY_API_KEY;
 const owner = process.env.ALCHEMY_OWNER || "vitalik.eth";
-const pageSize = Number.parseInt(process.env.ALCHEMY_PAGE_SIZE || "3", 10);
+const pageSize = parsePositiveInteger(process.env.ALCHEMY_PAGE_SIZE, 3);
 const withMetadata = parseBoolean(process.env.ALCHEMY_WITH_METADATA, true);
+const displayLimit = parseNonNegativeInteger(process.env.ALCHEMY_DISPLAY_LIMIT, 10);
 
 if (!apiKey) {
   console.error("Missing ALCHEMY_API_KEY.");
@@ -40,6 +42,16 @@ function parseBoolean(value, defaultValue) {
   }
 
   return value.trim().toLowerCase() === "true";
+}
+
+function parsePositiveInteger(value, defaultValue) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
+function parseNonNegativeInteger(value, defaultValue) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : defaultValue;
 }
 
 async function fetchJson(path, query = {}) {
@@ -62,16 +74,16 @@ async function fetchJson(path, query = {}) {
   return response.json();
 }
 
-function printOwnedNftSummary(nfts) {
+function printOwnedNftSummary(nfts, maxToDisplay) {
   if (!Array.isArray(nfts) || nfts.length === 0) {
     console.log("No NFTs were returned for this owner.");
     return;
   }
 
-  const displayLimit = Math.min(nfts.length, 10);
-  console.log(`Displaying ${displayLimit} of ${nfts.length} NFTs returned in this page.`);
+  const displayCount = Math.min(nfts.length, maxToDisplay);
+  console.log(`Displaying ${displayCount} of ${nfts.length} NFTs returned in this page.`);
 
-  for (const [index, nft] of nfts.slice(0, displayLimit).entries()) {
+  for (const [index, nft] of nfts.slice(0, displayCount).entries()) {
     console.log(`\nNFT ${index + 1}`);
     console.log(`- Contract: ${nft.contract?.address || "unknown"}`);
     console.log(`- Token ID: ${nft.tokenId || "unknown"}`);
@@ -84,8 +96,8 @@ function printOwnedNftSummary(nfts) {
     );
   }
 
-  if (nfts.length > displayLimit) {
-    console.log(`\n...${nfts.length - displayLimit} more NFTs omitted from console output.`);
+  if (nfts.length > displayCount) {
+    console.log(`\n...${nfts.length - displayCount} more NFTs omitted from console output.`);
   }
 }
 
@@ -106,6 +118,7 @@ function formatForDisplay(value, maxLength = 120) {
 async function main() {
   console.log(`Using NFT API base URL: https://eth-mainnet.g.alchemy.com/nft/v3/<redacted-key>`);
   console.log(`Fetching up to ${pageSize} NFTs for owner: ${owner}`);
+  console.log(`Displaying up to ${displayLimit} NFT summaries in the console.`);
   console.log(
     `Equivalent request: /getNFTsForOwner?owner=${owner}&withMetadata=${withMetadata}&pageSize=${pageSize}`
   );
@@ -123,7 +136,7 @@ async function main() {
     console.log("No pagination key returned for this page.");
   }
 
-  printOwnedNftSummary(ownedNftsResponse.ownedNfts);
+  printOwnedNftSummary(ownedNftsResponse.ownedNfts, displayLimit);
 
   const firstNft = ownedNftsResponse.ownedNfts?.[0];
   if (!firstNft?.contract?.address || !firstNft?.tokenId) {

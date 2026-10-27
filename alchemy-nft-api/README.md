@@ -18,6 +18,7 @@ If you want to match the request shape you pasted exactly, use:
 ALCHEMY_OWNER=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
 ALCHEMY_PAGE_SIZE=100
 ALCHEMY_WITH_METADATA=true
+ALCHEMY_DISPLAY_LIMIT=10
 ```
 
 The script reads the key from `process.env.ALCHEMY_API_KEY` and never hard-codes it.
@@ -44,7 +45,7 @@ node demo-script.js
 
 1. Loads `ALCHEMY_API_KEY` with `dotenv`
 2. Calls `getNFTsForOwner` for an owner such as `vitalik.eth` or `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`
-3. Prints a short summary of the returned NFTs, capped to the first 10 items for readability
+3. Prints a short summary of the returned NFTs, capped by `ALCHEMY_DISPLAY_LIMIT` for readability
 4. Calls `getNFTMetadata` for the first NFT in that list
 5. Prints key metadata fields such as the NFT name, token type, token URI, image URL, and last-updated timestamp
 6. Prints the equivalent `getNFTsForOwner` request path so you can compare it directly with the Alchemy docs or your saved URL
@@ -57,7 +58,7 @@ node demo-script.js
 - `ownedNfts`: the NFT records for the current page
 - `pageKey`: a pagination token you can pass into a later request if you want more results
 - `withMetadata=true`: includes metadata fields in each returned NFT item
-- the script prints at most the first 10 NFT summaries from the page so `pageSize=100` stays readable in the terminal
+- `ALCHEMY_DISPLAY_LIMIT`: controls how many NFT summaries are printed from the page so `pageSize=100` stays readable in the terminal
 
 Each item in `ownedNfts` commonly includes:
 
