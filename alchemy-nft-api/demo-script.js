@@ -68,7 +68,10 @@ function printOwnedNftSummary(nfts) {
     return;
   }
 
-  for (const [index, nft] of nfts.entries()) {
+  const displayLimit = Math.min(nfts.length, 10);
+  console.log(`Displaying ${displayLimit} of ${nfts.length} NFTs returned in this page.`);
+
+  for (const [index, nft] of nfts.slice(0, displayLimit).entries()) {
     console.log(`\nNFT ${index + 1}`);
     console.log(`- Contract: ${nft.contract?.address || "unknown"}`);
     console.log(`- Token ID: ${nft.tokenId || "unknown"}`);
@@ -79,6 +82,10 @@ function printOwnedNftSummary(nfts) {
         nft.image?.originalUrl || nft.image?.cachedUrl || nft.raw?.metadata?.image || "unavailable"
       )}`
     );
+  }
+
+  if (nfts.length > displayLimit) {
+    console.log(`\n...${nfts.length - displayLimit} more NFTs omitted from console output.`);
   }
 }
 
