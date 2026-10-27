@@ -9,8 +9,9 @@ Before you run this script, please create a .env file in this folder with:
 ALCHEMY_API_KEY=<my-key>
 
 Optional overrides:
-ALCHEMY_OWNER=vitalik.eth
-ALCHEMY_PAGE_SIZE=3
+ALCHEMY_OWNER=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+ALCHEMY_PAGE_SIZE=100
+ALCHEMY_WITH_METADATA=true
 `;
 
 if (process.argv.includes("--help")) {
@@ -21,6 +22,7 @@ if (process.argv.includes("--help")) {
 const apiKey = process.env.ALCHEMY_API_KEY;
 const owner = process.env.ALCHEMY_OWNER || "vitalik.eth";
 const pageSize = Number.parseInt(process.env.ALCHEMY_PAGE_SIZE || "3", 10);
+const withMetadata = parseBoolean(process.env.ALCHEMY_WITH_METADATA, true);
 
 if (!apiKey) {
   console.error("Missing ALCHEMY_API_KEY.");
@@ -31,6 +33,14 @@ if (!apiKey) {
 }
 
 const baseUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/${apiKey}`;
+
+function parseBoolean(value, defaultValue) {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  return value.trim().toLowerCase() === "true";
+}
 
 async function fetchJson(path, query = {}) {
   const params = new URLSearchParams();
@@ -89,9 +99,13 @@ function formatForDisplay(value, maxLength = 120) {
 async function main() {
   console.log(`Using NFT API base URL: https://eth-mainnet.g.alchemy.com/nft/v3/<redacted-key>`);
   console.log(`Fetching up to ${pageSize} NFTs for owner: ${owner}`);
+  console.log(
+    `Equivalent request: /getNFTsForOwner?owner=${owner}&withMetadata=${withMetadata}&pageSize=${pageSize}`
+  );
 
   const ownedNftsResponse = await fetchJson("getNFTsForOwner", {
     owner,
+    withMetadata,
     pageSize,
   });
 
